@@ -48,6 +48,8 @@ gflags.DEFINE_boolean(
 gflags.DEFINE_boolean(
   'toggle', False, 'Toggle operation', short_name='t')
 gflags.DEFINE_boolean(
+  'help', False, 'Show help', short_name='h')
+gflags.DEFINE_boolean(
   'quit', False, 'Quit operation', short_name='q')
 
 # Flags related to options on above operations.
@@ -73,8 +75,10 @@ gflags.DEFINE_string(
   'title', '', 'The name of the task.')
 
 
-USAGE = ('[-a]dd, [-c]lear, [-d]elete, [-e]dit, [-r]emove task, [-m]ove, ' +
-         '[-n]ew list/re[-n]ame, [-s]ummary, [-t]oggle, [-q]uit: ')
+USAGE = ('\t[-a]dd\n\t[-c]lear\n\t[-d]elete\n\t[-e]dit\n\t[-r]emove task\n\t[-m]ove\n\t' +
+         '[-n]ew list/re[-n]ame\n\t[-s]ummary\n\t[-t]oggle\n\t[-h]elp\n\t[-q]uit\n')
+
+PROMPT = ('tasky> ')
 
 # Environment constants
 TASKY_DIR = os.path.join(os.environ['HOME'], '.tasky')
@@ -386,7 +390,9 @@ class Tasky(object):
       TextColor.TITLE  = ''
       TextColor.CLEAR  = ''
 
-    if FLAGS.add:
+    if FLAGS.help:
+      print USAGE
+    elif FLAGS.add:
       task = {'title': FLAGS.title}
       if FLAGS['date'].present:
         d = time.strptime(FLAGS.date, "%m/%d/%Y")
@@ -484,30 +490,41 @@ class Tasky(object):
 
 def ReadLoop(tasky):
   while True:
-    # In the interactive case, display the list before any operations unless
-    # the previous operation was a --list.
-    if not FLAGS['list'].present:
-      if FLAGS.summary:
-        tasky.PrintSummary()
-      else:
-        tasky.PrintAllTaskLists()
-
-    # Convert all input to unicode type with utf-8 encoding.
-    readIn = unicode(raw_input(USAGE), 'utf-8')
-    # shlex does not accept unicode types, so convert to str before lexing.
-    # Also prepend a string to hold the place of the application name.
-    args = [''] + shlex.split(readIn.encode('utf-8'))
-    # Decode back to unicode type again before further processing.
-    args = [x.decode('utf-8') for x in args]
-
-    # Re-populate flags based on this input.
-    FLAGS.Reset()
-    FLAGS(args)
-
-    if FLAGS.quit:
+    try:
+      # Convert all input to unicode type with utf-8 encoding.
+      readIn = unicode(raw_input(PROMPT), 'utf-8')
+      # shlex does not accept unicode types, so convert to str before lexing.
+      # Also prepend a string to hold the place of the application name.
+      args = [''] + shlex.split(readIn.encode('utf-8'))
+      # Decode back to unicode type again before further processing.
+      args = [x.decode('utf-8') for x in args]
+    except KeyboardInterrupt:
+      print ''
       break
-    tasky.HandleInputArgs()
 
+    try:
+      # Re-populate flags based on this input.
+      FLAGS.Reset()
+      FLAGS(args)
+
+      if FLAGS.quit:
+        break
+
+      tasky.HandleInputArgs()
+
+      # In the interactive case, display the list before any operations unless
+      # the previous operation was a --list.
+      if not FLAGS['list'].present:
+        if FLAGS.summary:
+          tasky.PrintSummary()
+        else:
+          tasky.PrintAllTaskLists()
+    except gflags.exceptions.UnrecognizedFlagError:
+      print 'Unknown flag used!'
+      continue
+    except Exception as e:
+      print 'Error: ' + e
+      continue
 
 def main(args):
   # Ensure that stdout is written as utf-8.
@@ -519,23 +536,29 @@ def main(args):
   tasky.GetData()
 
   if len(args) > 1:
-    FLAGS(args)
-    tasky.HandleInputArgs()
+    try:
+      FLAGS(args)
 
-    # In the non-interactive case, print task list after the operation unless
-    # --list was the operation just performed.
-    if not FLAGS['list'].present:
-      if FLAGS.summary:
-        tasky.PrintSummary()
-      else:
-        if FLAGS['tasklist'].present:
-          tasklistId = tasky.taskLists.keys()[FLAGS.tasklist]
-          if FLAGS.summary:
-            tasky.PrintAllTasks(FLAGS.tasklist, tasklistId, onlySummary=True)
-          else:
-            tasky.PrintAllTasks(FLAGS.tasklist, tasklistId)
+      tasky.HandleInputArgs()
+
+      # In the non-interactive case, print task list after the operation unless
+      # --list was the operation just performed.
+      if not FLAGS['list'].present:
+        if FLAGS.summary:
+          tasky.PrintSummary()
         else:
-          tasky.PrintAllTaskLists()
+          if FLAGS['tasklist'].present:
+            tasklistId = tasky.taskLists.keys()[FLAGS.tasklist]
+            if FLAGS.summary:
+              tasky.PrintAllTasks(FLAGS.tasklist, tasklistId, onlySummary=True)
+            else:
+              tasky.PrintAllTasks(FLAGS.tasklist, tasklistId)
+          else:
+            tasky.PrintAllTaskLists()
+    except:
+      print 'Unknown flag used!'
+      print USAGE
+
   else:
     ReadLoop(tasky)
 
